@@ -1,0 +1,140 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Column Lists — Web App</title>
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root{--bg:#f7f7f8;--ink:#1f2937;--muted:#6b7280;--panel:#ffffff;--border:#e5e7eb;--accent:#2563eb}
+    [data-theme="dark"]{--bg:#0b1020;--ink:#e5e7eb;--muted:#9ca3af;--panel:#0f172a;--border:#1f2937;--accent:#60a5fa}
+    [data-theme="hc"]{--bg:#ffffff;--ink:#000000;--muted:#000000;--panel:#ffffff;--border:#000000;--accent:#000000}
+    html,body{height:100%;margin:0;font:14px system-ui;background:var(--bg);color:var(--ink)}
+    .appbar{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);background:var(--panel);position:sticky;top:0;z-index:10}
+    .spacer{flex:1}
+    .input{border:1px solid var(--border);border-radius:8px;padding:6px 8px;background:var(--panel);color:var(--ink)}
+    .btn{border:1px solid var(--border);background:var(--panel);border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--ink)}
+    .btn:hover{filter:brightness(1.02)}
+    .columns{display:flex;gap:12px;padding:12px;overflow:auto;height:calc(100% - 62px)}
+    .column{width:280px;background:var(--panel);border:1px solid var(--border);border-radius:12px;flex-shrink:0;display:flex;max-height:100%}
+    .col-inner{display:flex;flex-direction:column;gap:8px;padding:8px;flex:1;min-height:0}
+    .col-head{display:flex;align-items:center;gap:6px;cursor:grab}
+    .col-title{font-weight:600;flex:1;border:1px dashed transparent;padding:2px 4px;border-radius:6px}
+    .col-title[contenteditable="true"]{border-color:var(--border);background:rgba(0,0,0,.02)}
+    .col-body{overflow:auto;min-height:40px}
+    .col-footer{display:flex;gap:6px}
+    .item{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:6px;cursor:grab}
+    .meta{display:flex;gap:6px;align-items:center;margin-top:4px;font-size:12px;color:var(--muted)}
+    .placeholder{height:40px;border:2px dashed var(--border);margin-bottom:6px;border-radius:8px}
+    .col-placeholder{width:280px;height:120px;border:2px dashed var(--border);border-radius:12px;flex-shrink:0}
+    .ghost{opacity:.6;pointer-events:none;position:fixed;left:0;top:0;transform:translate(var(--gx,0), var(--gy,0))}
+    .due.badge{border:1px solid var(--border);padding:0 6px;border-radius:6px}
+    .overdue{background:#fee2e2}
+  </style>
+</head>
+<body>
+  <div class="appbar">
+    <strong>Column Lists</strong>
+    <input id="newColName" class="input" placeholder="New column name"/>
+    <button id="addColBtn" class="btn">+ Column</button>
+    <span class="spacer"></span>
+    <div class="seg">
+      <button id="lightBtn" class="btn" title="Light theme">Light</button>
+      <button id="darkBtn" class="btn" title="Dark theme">Dark</button>
+      <button id="hcBtn" class="btn" title="High-contrast theme">HC</button>
+    </div>
+    <button id="exportBtn" class="btn">Export</button>
+    <label class="btn" for="importFile">Import<input id="importFile" type="file" accept="application/json" style="display:none"></label>
+  </div>
+  <div class="columns" id="columns"></div>
+<script>
+const STORAGE='clists.v3';
+const load=()=>{try{const r=localStorage.getItem(STORAGE);return r?JSON.parse(r):null;}catch(e){return null}};
+const save=()=>localStorage.setItem(STORAGE,JSON.stringify(state));
+const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+let state=load()||{
+  settings:{theme:'light'},
+  columns:[
+    {id:uid(), title:'Today', items:[{id:uid(), text:'Sample 1'},{id:uid(), text:'Sample 2'}]},
+    {id:uid(), title:'Grocery', items:[]},
+    {id:uid(), title:'Projects', items:[]},
+    {id:uid(), title:'Fun Ideas', items:[]},
+    {id:uid(), title:'Baby', items:[]},
+    {id:uid(), title:'House/Family', items:[]},
+    {id:uid(), title:'Backlog', items:[]}
+  ]
+};
+applyTheme(state.settings.theme||'light');
+
+// --- Column deletion (moves items to Backlog with divider) ---
+function getOrCreateBacklog(excludeId){
+  var existing=state.columns.find(c=>c.title==='Backlog'&&c.id!==excludeId);
+  if(existing) return existing;
+  var created={id:uid(),title:'Backlog',items:[]};
+  state.columns.push(created);
+  return created;
+}
+function deleteColumn(colId){
+  var idx=state.columns.findIndex(c=>c.id===colId);
+  if(idx===-1)return;
+  if(state.columns.length<=1){alert('Keep at least one column.');return;}
+  var col=state.columns[idx];
+  if(col.items&&col.items.length){
+    var fb=getOrCreateBacklog(colId);
+    var divider={id:uid(),text:`From: ${col.title}`,due:null,divider:true};
+    fb.items.unshift(divider);
+    for(var i=col.items.length-1;i>=0;i--){fb.items.unshift(col.items[i]);}
+  }
+  state.columns.splice(idx,1);
+  save();render();
+}
+
+// --- Rendering ---
+const columnsEl=document.getElementById('columns');
+function render(){
+  columnsEl.innerHTML='';
+  state.columns.forEach(col=>{
+    const wrap=document.createElement('div');wrap.className='column';wrap.dataset.colId=col.id;
+    const inner=document.createElement('div');inner.className='col-inner';
+    const head=document.createElement('div');head.className='col-head';
+    const title=document.createElement('div');title.className='col-title';title.textContent=col.title;
+    title.addEventListener('click',()=>makeEditable(title,v=>{col.title=v||'Untitled';save();}));
+    const del=document.createElement('button');del.className='btn';del.textContent='Del';del.onclick=()=>{
+      if(state.columns.length<=1){alert('Keep at least one column.');return;}
+      const msg=(col.items&&col.items.length)?`Delete column ${col.title} and move ${col.items.length} item(s) to Backlog?`:`Delete column ${col.title}?`;
+      if(confirm(msg))deleteColumn(col.id);
+    };
+    head.append(title,del);
+    const body=document.createElement('div');body.className='col-body';body.dataset.colId=col.id;
+    col.items.forEach(it=>body.appendChild(renderItem(col.id,it)));
+    const foot=document.createElement('div');foot.className='col-footer';
+    const inp=document.createElement('input');inp.className='input';inp.placeholder='Add item…';
+    const due=document.createElement('input');due.className='input';due.type='date';
+    const add=document.createElement('button');add.className='btn';add.textContent='+';
+    add.onclick=()=>{if(!inp.value.trim())return;addItem(col.id,inp.value.trim(),due.value||null);inp.value='';due.value='';};
+    foot.append(inp,due,add);
+    inner.append(head,body,foot);wrap.appendChild(inner);columnsEl.appendChild(wrap);
+  });
+}
+function renderItem(colId,item){
+  const d=document.createElement('div');d.className='item';d.textContent=item.text;d.dataset.itemId=item.id;
+  if(item.divider){d.style.fontWeight='600';d.style.background='#e0e7ff';}
+  return d;
+}
+
+// --- Add/Remove Items ---
+function addItem(colId,text,due){const c=state.columns.find(x=>x.id===colId);if(!c)return;c.items.push({id:uid(),text,due});save();render();}
+
+// --- Theme ---
+function applyTheme(t){document.documentElement.setAttribute('data-theme',t);state.settings.theme=t;save();}
+['light','dark','hc'].forEach(m=>document.getElementById(m+'Btn').onclick=()=>applyTheme(m));
+
+function makeEditable(node,onDone){node.setAttribute('contenteditable','true');node.focus();node.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();node.removeAttribute('contenteditable');if(onDone)onDone(node.textContent.trim());save();}}}
+
+render();
+</script>
+</body>
+</html>

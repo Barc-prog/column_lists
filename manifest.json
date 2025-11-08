@@ -1,0 +1,15 @@
+{
+  "name": "Column Lists",
+  "short_name": "Lists",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'><rect width='256' height='256' rx='32' fill='%232563eb'/><g fill='white' font-family='Segoe UI' font-size='120' font-weight='700'><text x='30' y='150'>CL</text></g></svg>",
+      "sizes": "256x256",
+      "type": "image/svg+xml"
+    }
+  ]
+}
